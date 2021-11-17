@@ -1,4 +1,7 @@
 <resources>
     <string name="app_name">LocationPlus</string>
     <string name="title_activity_maps">Map</string>
+    <string name="currentloc_symbol">currentLoc symbol</string>
+    <string name="cancelgeofence">cancelGeoFence</string>
+    <string name="satelliteinfo">satelliteInfo</string>
 </resources>

@@ -39,5 +39,40 @@ public class GeofenceTransitionJobIntentService extends JobIntentService {
         // arrived at their destination (is within the Geofence), then
         // 1. Create a notification and display it
         // 2. Go back to the main activity (via Intent) to handle cleanup (Geofence removal, etc.)
+        notifyUser(getApplicationContext());
+
+        Intent deleteGeofence = new Intent(this, MapsActivity.class);
+        deleteGeofence.putExtra("Geofence", true);
+        startActivity(deleteGeofence);
+    }
+
+    public void notifyUser(Context context){
+        if (Build.VERSION.SDK_INT < 26) {
+            Log.d("GeoTransition", "Notification Failed: SDK < 26");
+            return;
+        }
+        Log.d("GeoTransition", "Notification Sent");
+        //Create notification manager
+        mNotificationManager =(NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+
+        //Create notification channel
+        mNotificationChannel = new NotificationChannel("default",
+                "Geofence_Enter",
+                NotificationManager.IMPORTANCE_DEFAULT);
+
+        mNotificationChannel.setDescription("Geofence_Transition");
+        mNotificationManager.createNotificationChannel(mNotificationChannel);
+
+        //Build notification
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(context, "default")
+                .setSmallIcon(R.drawable.arrived)
+                .setContentTitle("Arrived at Destination")
+                .setContentText("Nice")
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setAutoCancel(true)
+                .setOnlyAlertOnce(true);
+
+        mNotificationManagerCompat = NotificationManagerCompat.from(context);
+        mNotificationManager.notify(0, builder.build());
     }
 }

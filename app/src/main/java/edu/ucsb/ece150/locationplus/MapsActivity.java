@@ -15,6 +15,7 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.location.GnssStatus;
@@ -58,7 +59,11 @@ import java.util.Map;
 
 public class MapsActivity extends AppCompatActivity implements LocationListener, OnMapReadyCallback {
 
+    //Shared Preferences
+    private SharedPreferences myPreferences;
+
     //Geofence Variables
+    private boolean existingGeofence;
     private Geofence mGeofence;
     private GeofencingClient mGeofencingClient;
     private PendingIntent mPendingIntent = null;
@@ -67,10 +72,13 @@ public class MapsActivity extends AppCompatActivity implements LocationListener,
     private FloatingActionButton cancel;
     private Circle geofenceRadius;
     private boolean deleteGeofence;
+    private double geoLat;
+    private double geoLong;
 
     //Map Variables
     private GnssStatus.Callback mGnssStatusCallback;
     private GoogleMap mMap;
+    private SupportMapFragment mapFragment;
     private LocationManager mLocationManager;
     private double mLat;
     private double mLong;
@@ -89,16 +97,23 @@ public class MapsActivity extends AppCompatActivity implements LocationListener,
     //Toolbar variables
     private Toolbar mToolbar;
 
+    //Misc
+    private ImageView locked;
+    private ImageView satView;
+
     @RequiresApi(api = Build.VERSION_CODES.N)
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_maps);
-
+        Log.d("MAP_READY", "here.create");
         // Set up Google Maps
-        SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
+        mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
+
+        //Shared Preferences
+        myPreferences = getApplicationContext().getSharedPreferences("appPref", Context.MODE_PRIVATE);
 
         // Set up Geofencing Client
         mGeofencingClient = LocationServices.getGeofencingClient(MapsActivity.this);
@@ -141,7 +156,6 @@ public class MapsActivity extends AppCompatActivity implements LocationListener,
         satList.setAdapter(adapter);
         satList.setVisibility(View.GONE);
         satCount.setVisibility(View.GONE);
-
         satList.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
@@ -162,41 +176,27 @@ public class MapsActivity extends AppCompatActivity implements LocationListener,
             }
         });
 
-        mHide = true;
+        mHide = myPreferences.getBoolean("mHide", true);
         //Set up satellite button & lock
-        ImageView satView = findViewById(R.id.satellite);
-        ImageView locked = findViewById(R.id.currentLocation);
+        satView = findViewById(R.id.satellite);
+        locked = findViewById(R.id.currentLocation);
         satView.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                // Unhide satellite list
-                if (!mHide) {
-                    satList.setVisibility(View.VISIBLE);
-                    satCount.setVisibility(View.VISIBLE);
-                    locked.setVisibility(View.INVISIBLE);
-                    mapFragment.getView().setVisibility(View.GONE);
-                } else {
-                    satList.setVisibility(View.GONE);
-                    satCount.setVisibility(View.GONE);
-                    locked.setVisibility(View.VISIBLE);
-                    mapFragment.getView().setVisibility(View.VISIBLE);
-                }
                 mHide = !mHide;
+                Log.d("hide", "Clicked!" + mHide);
+                showList();
             }
         });
 
         //Set up locked button
-        mLocked = true;
+        mLocked = myPreferences.getBoolean("mLocked", true);
         locked.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                // Lock/unlock camera to Location
-                if (mLocked) {
-                    locked.setColorFilter(Color.TRANSPARENT);
-                } else {
-                    locked.setColorFilter(Color.GREEN);
-                }
                 mLocked = !mLocked;
+                lockCam();
+                Log.d("lock", "Clicked!" + mLocked);
             }
         });
 
@@ -214,13 +214,7 @@ public class MapsActivity extends AppCompatActivity implements LocationListener,
                         .setMessage("Delete this destination?")
                         .setPositiveButton("Yes", new DialogInterface.OnClickListener() {
                             public void onClick(DialogInterface dialog, int id) {
-                                //Remove map marker
-                                destLoc.remove();
-                                destLoc = null;
-                                cancel.setVisibility(View.GONE);
-                                //Remove Geofence
-                                mGeofencingClient.removeGeofences(getGeofencePendingIntent());
-                                geofenceRadius.remove();
+                                removeGeofence();
                             }
                         })
                         .setNegativeButton("No", new DialogInterface.OnClickListener() {
@@ -230,25 +224,21 @@ public class MapsActivity extends AppCompatActivity implements LocationListener,
                         }).show();
             }
         });
-
-        //Delete Geofence if Entered
-        Intent intent = getIntent();
-        deleteGeofence = intent.getBooleanExtra("Geofence", false);
-        if (deleteGeofence) {
-            mGeofencingClient.removeGeofences(getGeofencePendingIntent());
-        }
     }
 
     @Override
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
 
-        // [TODO] Implement behavior when Google Maps is ready -- make marker
+        Log.d("MAP_READY", "here.ready");
+        // [TODO] Implement behavior when Google Maps is ready -- make marker, move location
         currentLocOpt = new MarkerOptions()
                 .position(new LatLng(mLat, mLong))
                 .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE));
 
         currentLoc = mMap.addMarker(currentLocOpt);
+        //Update Map Camera
+        lockCam();
 
         // Do nothing on a marker click
         mMap.setOnMarkerClickListener(new GoogleMap.OnMarkerClickListener() {
@@ -264,50 +254,21 @@ public class MapsActivity extends AppCompatActivity implements LocationListener,
         mMap.setOnMapLongClickListener(new GoogleMap.OnMapLongClickListener() {
             @Override
             public void onMapLongClick(LatLng latLng) {
+                //If there is no marker on the map
                 if (destLoc == null) {
                     AlertDialog builder = new AlertDialog.Builder(MapsActivity.this)
                             .setTitle("Confirm Destination")
                             .setMessage("Set (" + latLng.longitude + "," + latLng.latitude + ") as your destination?")
                             .setPositiveButton("Yes", new DialogInterface.OnClickListener() {
-                                @SuppressLint("MissingPermission")
                                 public void onClick(DialogInterface dialog, int id) {
-                                    //Create Geofence
-                                    int geo_rad = 100;
-                                    mGeofence = new Geofence.Builder()
-                                            .setRequestId("destination")
-                                            .setCircularRegion(latLng.latitude, latLng.longitude, geo_rad)
-                                            .setExpirationDuration(Geofence.NEVER_EXPIRE)
-                                            .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER)
-                                            .build();
-
-                                    mGeofencingClient.addGeofences(getGeofenceRequest(), getGeofencePendingIntent())
-                                            .addOnSuccessListener(new OnSuccessListener<Void>() {
-                                                @Override
-                                                public void onSuccess(Void unused) {
-                                                    //Add Geofence Radius to Map
-                                                    CircleOptions radOption = new CircleOptions()
-                                                            .center(latLng)
-                                                            .strokeColor(Color.argb(50, 70, 70, 70))
-                                                            .fillColor(Color.argb(100, 150, 150, 150))
-                                                            .radius(geo_rad);
-                                                    geofenceRadius = mMap.addCircle(radOption);
-                                                    //Create a Geofence marker
-                                                    destLocOpt = new MarkerOptions()
-                                                            .position(latLng)
-                                                            .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ROSE));
-                                                    destLoc = mMap.addMarker(destLocOpt);
-
-                                                    //Create cancel button
-                                                    cancel.setVisibility(View.VISIBLE);
-                                                    Toast.makeText(MapsActivity.this, "Geofence Created", Toast.LENGTH_LONG).show();
-                                                }
-                                            })
-                                            .addOnFailureListener(new OnFailureListener() {
-                                                @Override
-                                                public void onFailure(@NonNull Exception e) {
-                                                    Toast.makeText(MapsActivity.this, "Geofence Creation Failed", Toast.LENGTH_LONG).show();
-                                                }
-                                            });
+                                    //Store destination coordinates
+                                    SharedPreferences.Editor editor = myPreferences.edit();
+                                    editor.putFloat("geoLat", (float) latLng.latitude);
+                                    editor.putFloat("geoLong", (float) latLng.longitude);
+                                    editor.putBoolean("existingGeofence", true);
+                                    editor.apply();
+                                    //Make Geofence
+                                    makeGeofence(latLng);
                                 }
                             })
                             .setNegativeButton("No", new DialogInterface.OnClickListener() {
@@ -323,26 +284,102 @@ public class MapsActivity extends AppCompatActivity implements LocationListener,
     @Override
     public void onLocationChanged(Location location) {
         // [TODO] Implement behavior when a location update is received
-        mLat = location.getLatitude();
+        Log.d("MAP_READY", "here.location");
+        Log.d("Geofence", "exists? " + existingGeofence);
+        mLat =  location.getLatitude();
         mLong = location.getLongitude();
         LatLng latlng = new LatLng(mLat, mLong);
 
-        Log.d("LOCATIONALLY", "Latitude: " + mLat + "");
-        Log.d("LOCATIONALLY", "Longitude: " + mLong + "");
-
         currentLoc.setPosition(latlng);
 
-        //Zoom into current location at the start
-        if (mLocked){
-            Log.d("LOCKED", "Status: Locked");
-            mMap.animateCamera(CameraUpdateFactory.newCameraPosition(CameraPosition.fromLatLngZoom(latlng,18)));
-            mMap.getUiSettings().setAllGesturesEnabled(false);
+        //Store coordinates
+        SharedPreferences.Editor editor = myPreferences.edit();
+        editor.putFloat("mLat", (float) mLat);
+        editor.putFloat("mLong", (float) mLong);
+        editor.apply();
+    }
+
+    public void showList(){
+        // Show/Hide satellite list
+        if (mHide) {
+            satList.setVisibility(View.GONE);
+            satCount.setVisibility(View.GONE);
+            locked.setVisibility(View.VISIBLE);
+            mapFragment.getView().setVisibility(View.VISIBLE);
+        } else {
+            satList.setVisibility(View.VISIBLE);
+            satCount.setVisibility(View.VISIBLE);
+            locked.setVisibility(View.INVISIBLE);
+            mapFragment.getView().setVisibility(View.GONE);
         }
-        else{
-            Log.d("LOCKED", "Status: Unlocked");
+    }
+
+    public void lockCam(){
+        //Lock / Unlock Camera
+        if (mLocked) {
+            locked.setColorFilter(Color.GREEN);
+            mMap.animateCamera(CameraUpdateFactory.newCameraPosition(CameraPosition.fromLatLngZoom(new LatLng (mLat, mLong),18)));
+            mMap.getUiSettings().setAllGesturesEnabled(false);
+        } else {
+            locked.setColorFilter(Color.TRANSPARENT);
             mMap.getUiSettings().setAllGesturesEnabled(true);
         }
+    }
 
+    @SuppressLint("MissingPermission")
+    public void makeGeofence(LatLng latLng){
+        //If Geofence exists, make it
+        existingGeofence = myPreferences.getBoolean("existingGeofence", false);
+        if (existingGeofence){
+            int geo_rad = 100;
+            //Create Geofence Object
+            mGeofence = new Geofence.Builder()
+                    .setRequestId("destination")
+                    .setCircularRegion(latLng.latitude, latLng.longitude, geo_rad)
+                    .setExpirationDuration(Geofence.NEVER_EXPIRE)
+                    .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER)
+                    .build();
+            //Add Geofence to the map
+            mGeofencingClient.addGeofences(getGeofenceRequest(), getGeofencePendingIntent())
+                    .addOnSuccessListener(new OnSuccessListener<Void>() {
+                        @Override
+                        public void onSuccess(Void unused) {
+                            //Add Geofence Radius to Map
+                            CircleOptions radOption = new CircleOptions()
+                                    .center(latLng)
+                                    .strokeColor(Color.argb(50, 70, 70, 70))
+                                    .fillColor(Color.argb(100, 150, 150, 150))
+                                    .radius(geo_rad);
+                            geofenceRadius = mMap.addCircle(radOption);
+                            //Create a Geofence marker
+                            destLocOpt = new MarkerOptions()
+                                    .position(latLng)
+                                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ROSE));
+                            destLoc = mMap.addMarker(destLocOpt);
+
+                            //Create cancel button
+                            cancel.setVisibility(View.VISIBLE);
+                            Toast.makeText(MapsActivity.this, "Geofence Created", Toast.LENGTH_LONG).show();
+                        }
+                    })
+                    .addOnFailureListener(new OnFailureListener() {
+                        @Override
+                        public void onFailure(@NonNull Exception e) {
+                            Toast.makeText(MapsActivity.this, "Geofence Creation Failed", Toast.LENGTH_LONG).show();
+                        }
+                    });
+        }
+    }
+
+    public void removeGeofence(){
+        //Remove map marker
+        destLoc.remove();
+        destLoc = null;
+        cancel.setVisibility(View.GONE);
+        //Remove Geofence
+        mGeofencingClient.removeGeofences(getGeofencePendingIntent());
+        geofenceRadius.remove();
+        myPreferences.edit().remove("existingGeofence").apply();
     }
 
     /*
@@ -407,8 +444,27 @@ public class MapsActivity extends AppCompatActivity implements LocationListener,
     @Override
     protected void onResume() {
         super.onResume();
-
-        // [TODO] Data recovery
+        Log.d("MAP_READY", "here.resume");
+        //Delete Geofence if Entered
+        Intent intent = getIntent();
+        deleteGeofence = intent.getBooleanExtra("Geofence", false);
+        if (deleteGeofence) {
+            removeGeofence();
+            Log.d("GeoDelete", "deleted Geofence");
+        }
+        else{
+            // Normal Operations -- Data Recovery
+            showList();
+            //Store Current Coordinates
+            mLat = myPreferences.getFloat("mLat", 0);
+            mLong = myPreferences.getFloat("mLong", 0);
+            //Store Destination Coordinates
+            geoLat = myPreferences.getFloat("geoLat", 0);
+            geoLong = myPreferences.getFloat("geoLong", 0);
+            LatLng latLng = new LatLng(geoLat, geoLong);
+            //Create Geofence if needed
+            makeGeofence(latLng);
+        }
     }
 
     @Override
@@ -416,13 +472,24 @@ public class MapsActivity extends AppCompatActivity implements LocationListener,
         super.onPause();
 
         // [TODO] Data saving
+        Log.d("MAP_READY", "here.pause");
+        myPreferences = getApplicationContext().getSharedPreferences("appPref", Context.MODE_PRIVATE);
+        SharedPreferences.Editor editor = myPreferences.edit();
+
+        //Store Information
+        editor.putBoolean("mLocked", mLocked);
+        editor.putBoolean("mHide", mHide);
+        //longitude & latitude
+        Log.d("Coords Stored:" , "Lat: " + mLat + "Long: " + mLong);
+        Log.d("Destination Stored:" , "Lat: " + geoLat + "Long: " + geoLong);
+        editor.apply();
     }
 
     @RequiresApi(api = Build.VERSION_CODES.N)
     @Override
     protected void onStop() {
         super.onStop();
-
+        Log.d("MAP_READY", "here.stop");
         mLocationManager.removeUpdates(this);
         mLocationManager.unregisterGnssStatusCallback(mGnssStatusCallback);
     }

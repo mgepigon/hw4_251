@@ -107,9 +107,9 @@ public class MapsActivity extends AppCompatActivity implements LocationListener,
         setContentView(R.layout.activity_maps);
         Log.d("MAP_READY", "here.create");
 
-        //Delete Geofence if Entered
         Intent intent = getIntent();
-        deleteGeofence = intent.getBooleanExtra("Geofence", false);
+        deleteGeofence = intent.getBooleanExtra("deleteGeofence", false);
+
         // Set up Google Maps
         mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
@@ -235,11 +235,11 @@ public class MapsActivity extends AppCompatActivity implements LocationListener,
         mMap = googleMap;
         Log.d("MAP_READY", "here.ready");
 
-        //Remove Geofence if arrived, otherwise just put camera to current position
+        deleteGeofence = myPreferences.getBoolean("deleteGeofence", false);
+        //Create Geofence if needed
         if (deleteGeofence){
             removeGeofence();
-        }
-        else {
+        }else{
             currentLocation();
         }
         // [TODO] Implement behavior when Google Maps is ready -- make marker, move location
@@ -301,9 +301,9 @@ public class MapsActivity extends AppCompatActivity implements LocationListener,
 
         //Update Map Camera (if needed)
         lockCam();
-        //Update Geofence existence
         existingGeofence = myPreferences.getBoolean("existingGeofence", false);
 
+        Log.d("GeofenceExistence", "exist? " + existingGeofence);
         //Store coordinates
         SharedPreferences.Editor editor = myPreferences.edit();
         editor.putFloat("mLat", (float) mLat);
@@ -391,12 +391,13 @@ public class MapsActivity extends AppCompatActivity implements LocationListener,
     public void removeGeofence(){
         //Remove map marker & circle
         mMap.clear();
-        currentLocation();
         cancel.setVisibility(View.GONE);
         //Remove Geofence
         mGeofencingClient.removeGeofences(getGeofencePendingIntent());
         //Tell system that no Geofence exists
+        myPreferences.edit().remove("deleteGeofence").apply();
         myPreferences.edit().remove("existingGeofence").apply();
+        currentLocation();
     }
 
     // Checks for multiple permissions at once
@@ -477,7 +478,6 @@ public class MapsActivity extends AppCompatActivity implements LocationListener,
     protected void onResume() {
         super.onResume();
         Log.d("MAP_READY", "here.resume");
-
         //Data Recovery
         showList();
         //Store Current Coordinates into local
@@ -487,7 +487,7 @@ public class MapsActivity extends AppCompatActivity implements LocationListener,
         geoLat = myPreferences.getFloat("geoLat", 0);
         geoLong = myPreferences.getFloat("geoLong", 0);
         LatLng latLng = new LatLng(geoLat, geoLong);
-        //Create Geofence if needed
+
         makeGeofence(latLng);
     }
 

@@ -4,6 +4,7 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Build;
 import android.util.Log;
 
@@ -18,9 +19,7 @@ import com.google.android.gms.location.GeofencingEvent;
 
 public class GeofenceTransitionJobIntentService extends JobIntentService {
 
-    private NotificationChannel mNotificationChannel;
     private NotificationManager mNotificationManager;
-    private NotificationManagerCompat mNotificationManagerCompat;
 
     public static void enqueueWork(Context context, Intent intent) {
         enqueueWork(context, GeofenceTransitionJobIntentService.class, 0, intent);
@@ -41,8 +40,10 @@ public class GeofenceTransitionJobIntentService extends JobIntentService {
         // 2. Go back to the main activity (via Intent) to handle cleanup (Geofence removal, etc.)
         notifyUser(getApplicationContext());
 
+        SharedPreferences myPreferences = getApplicationContext().getSharedPreferences("appPref", Context.MODE_PRIVATE);
+        myPreferences.edit().putBoolean("deleteGeofence", true).apply();
+
         Intent arrived = new Intent(this, MapsActivity.class);
-        arrived.putExtra("Geofence", true);
         startActivity(arrived);
     }
 
@@ -72,7 +73,6 @@ public class GeofenceTransitionJobIntentService extends JobIntentService {
                 .setAutoCancel(true)
                 .setOnlyAlertOnce(true);
 
-        mNotificationManagerCompat = NotificationManagerCompat.from(context);
         mNotificationManager.notify(0, builder.build());
     }
 }

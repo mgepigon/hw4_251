@@ -47,27 +47,27 @@ public class GeofenceTransitionJobIntentService extends JobIntentService {
     }
 
     public void notifyUser(Context context){
-        if (Build.VERSION.SDK_INT < 26) {
-            Log.d("GeoTransition", "Notification Failed: SDK < 26");
-            return;
-        }
+//        if (Build.VERSION.SDK_INT < 26) {
+//            Log.d("GeoTransition", "Notification Failed: SDK < 26");
+//            return;
+//        }
         Log.d("GeoTransition", "Notification Sent");
         //Create notification manager
         mNotificationManager =(NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
-
-        //Create notification channel
-        mNotificationChannel = new NotificationChannel("default",
-                "Geofence_Enter",
-                NotificationManager.IMPORTANCE_DEFAULT);
-
-        mNotificationChannel.setDescription("Geofence_Transition");
-        mNotificationManager.createNotificationChannel(mNotificationChannel);
+//
+//        //Create notification channel
+//        mNotificationChannel = new NotificationChannel("default",
+//                "Geofence_Enter",
+//                NotificationManager.IMPORTANCE_DEFAULT);
+//
+//        mNotificationChannel.setDescription("Geofence_Transition");
+//        mNotificationManager.createNotificationChannel(mNotificationChannel);
 
         //Build notification
         NotificationCompat.Builder builder = new NotificationCompat.Builder(context, "default")
                 .setSmallIcon(R.drawable.arrived)
                 .setContentTitle("Arrived at Destination")
-                .setContentText("Nice")
+                .setContentText("Geofence Deleted")
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                 .setAutoCancel(true)
                 .setOnlyAlertOnce(true);

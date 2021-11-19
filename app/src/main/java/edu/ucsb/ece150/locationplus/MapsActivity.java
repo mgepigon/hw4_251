@@ -235,7 +235,7 @@ public class MapsActivity extends AppCompatActivity implements LocationListener,
         mMap = googleMap;
         Log.d("MAP_READY", "here.ready");
 
-        //Geofence Removal after arriving
+        //Remove Geofence if arrived, otherwise just put camera to current position
         if (deleteGeofence){
             removeGeofence();
         }
@@ -291,16 +291,15 @@ public class MapsActivity extends AppCompatActivity implements LocationListener,
     @Override
     public void onLocationChanged(Location location) {
         // [TODO] Implement behavior when a location update is received
-        //Log.d("MAP_READY", "here.location");
-        //Log.d("Geofence", "exists? " + existingGeofence);
+        //Grab current coordinates
         mLat =  location.getLatitude();
         mLong = location.getLongitude();
         LatLng latlng = new LatLng(mLat, mLong);
 
-        //Just move existing marker position per location found
+        //Move existing marker (from currentLocation()) to new coordinates
         currentLoc.setPosition(latlng);
 
-        //Update Map Camera
+        //Update Map Camera (if needed)
         lockCam();
         //Update Geofence existence
         existingGeofence = myPreferences.getBoolean("existingGeofence", false);
@@ -313,6 +312,7 @@ public class MapsActivity extends AppCompatActivity implements LocationListener,
     }
 
     public void currentLocation(){
+        //Create marker for current location using most updated coordinates
         currentLocOpt = new MarkerOptions()
                 .position(new LatLng(mLat, mLong))
                 .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE));
@@ -320,7 +320,7 @@ public class MapsActivity extends AppCompatActivity implements LocationListener,
     }
 
     public void showList(){
-        // Show/Hide satellite list
+        // Hide/Show satellite list
         if (mHide) {
             if (existingGeofence){
                 cancel.setVisibility(View.VISIBLE);
@@ -339,7 +339,7 @@ public class MapsActivity extends AppCompatActivity implements LocationListener,
     }
 
     public void lockCam(){
-        //Lock / Unlock Camera
+        //Lock / Unlock Camera to current position (change color of button in process)
         if (mLocked) {
             locked.setColorFilter(Color.GREEN);
             mMap.animateCamera(CameraUpdateFactory.newCameraPosition(CameraPosition.fromLatLngZoom(new LatLng (mLat, mLong),18)));
@@ -399,6 +399,18 @@ public class MapsActivity extends AppCompatActivity implements LocationListener,
         myPreferences.edit().remove("existingGeofence").apply();
     }
 
+    // Checks for multiple permissions at once
+    public static boolean hasPermissions(Context context, String... permissions) {
+        if (context != null && permissions != null) {
+            for (String permission : permissions) {
+                if (ActivityCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
     /*
      * The following three methods onProviderDisabled(), onProviderEnabled(), and onStatusChanged()
      * do not need to be implemented -- they must be here because this Activity implements
@@ -449,26 +461,29 @@ public class MapsActivity extends AppCompatActivity implements LocationListener,
         };
 
         // Asks for all Permissions
-        if (!hasPermissions(this, PERMISSIONS)) {
-            ActivityCompat.requestPermissions(this, PERMISSIONS, PERMISSION_ALL);
+        try{
+            if (!hasPermissions(this, PERMISSIONS)) {
+                ActivityCompat.requestPermissions(this, PERMISSIONS, PERMISSION_ALL);
+            }
         }
-
-        //Grabbing location updates w/ satellite information
-        mLocationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000, 0, this);
-        mLocationManager.registerGnssStatusCallback(mGnssStatusCallback);
+        finally{
+            //Grabbing location updates w/ satellite information
+            mLocationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 500, 0, this);
+            mLocationManager.registerGnssStatusCallback(mGnssStatusCallback);
+        }
     }
 
     @Override
     protected void onResume() {
         super.onResume();
         Log.d("MAP_READY", "here.resume");
-        // Normal Operations -- Data Recovery
 
+        //Data Recovery
         showList();
-        //Store Current Coordinates
+        //Store Current Coordinates into local
         mLat = myPreferences.getFloat("mLat", 0);
         mLong = myPreferences.getFloat("mLong", 0);
-        //Store Destination Coordinates
+        //Store Destination Coordinates into local
         geoLat = myPreferences.getFloat("geoLat", 0);
         geoLong = myPreferences.getFloat("geoLong", 0);
         LatLng latLng = new LatLng(geoLat, geoLong);
@@ -480,7 +495,7 @@ public class MapsActivity extends AppCompatActivity implements LocationListener,
     protected void onPause() {
         super.onPause();
 
-        // [TODO] Data saving
+        // [TODO] Data saving -- it only lands here at the end of each create->resume cycle
         Log.d("MAP_READY", "here.pause");
         myPreferences = getApplicationContext().getSharedPreferences("appPref", Context.MODE_PRIVATE);
         SharedPreferences.Editor editor = myPreferences.edit();
@@ -502,17 +517,4 @@ public class MapsActivity extends AppCompatActivity implements LocationListener,
         mLocationManager.removeUpdates(this);
         mLocationManager.unregisterGnssStatusCallback(mGnssStatusCallback);
     }
-
-    // Helper function to check for multiple permissions
-    public static boolean hasPermissions(Context context, String... permissions) {
-        if (context != null && permissions != null) {
-            for (String permission : permissions) {
-                if (ActivityCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED) {
-                    return false;
-                }
-            }
-        }
-        return true;
-    }
-
 }

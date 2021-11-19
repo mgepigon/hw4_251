@@ -67,7 +67,6 @@ public class MapsActivity extends AppCompatActivity implements LocationListener,
     private Geofence mGeofence;
     private GeofencingClient mGeofencingClient;
     private PendingIntent mPendingIntent = null;
-    private Marker destLoc;
     private MarkerOptions destLocOpt;
     private FloatingActionButton cancel;
     private Circle geofenceRadius;
@@ -107,6 +106,10 @@ public class MapsActivity extends AppCompatActivity implements LocationListener,
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_maps);
         Log.d("MAP_READY", "here.create");
+
+        //Delete Geofence if Entered
+        Intent intent = getIntent();
+        deleteGeofence = intent.getBooleanExtra("Geofence", false);
         // Set up Google Maps
         mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
@@ -141,8 +144,8 @@ public class MapsActivity extends AppCompatActivity implements LocationListener,
                     adapter.notifyDataSetChanged();
                 }
                 //Show count and show in Fix
-                String text = "Total: " + mSatellites.size() + "\n" +
-                        "In Fix: " + inFix;
+                String text = "Total: " + mSatellites.size() +
+                        "\nIn Fix: " + inFix;
                 satCount.setText(text);
                 satCount.setTextColor(Color.WHITE);
             }
@@ -214,6 +217,7 @@ public class MapsActivity extends AppCompatActivity implements LocationListener,
                         .setMessage("Delete this destination?")
                         .setPositiveButton("Yes", new DialogInterface.OnClickListener() {
                             public void onClick(DialogInterface dialog, int id) {
+                                //Take out what's on the map
                                 removeGeofence();
                             }
                         })
@@ -229,16 +233,19 @@ public class MapsActivity extends AppCompatActivity implements LocationListener,
     @Override
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
-
         Log.d("MAP_READY", "here.ready");
-        // [TODO] Implement behavior when Google Maps is ready -- make marker, move location
-        currentLocOpt = new MarkerOptions()
-                .position(new LatLng(mLat, mLong))
-                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE));
 
-        currentLoc = mMap.addMarker(currentLocOpt);
-        //Update Map Camera
-        lockCam();
+        //Geofence Removal after arriving
+        if (deleteGeofence){
+            removeGeofence();
+        }
+        else {
+            currentLocation();
+        }
+        // [TODO] Implement behavior when Google Maps is ready -- make marker, move location
+
+        //If Geofence exists, make note of it
+        existingGeofence = myPreferences.getBoolean("existingGeofence", false);
 
         // Do nothing on a marker click
         mMap.setOnMarkerClickListener(new GoogleMap.OnMarkerClickListener() {
@@ -255,7 +262,7 @@ public class MapsActivity extends AppCompatActivity implements LocationListener,
             @Override
             public void onMapLongClick(LatLng latLng) {
                 //If there is no marker on the map
-                if (destLoc == null) {
+                if (!existingGeofence) {
                     AlertDialog builder = new AlertDialog.Builder(MapsActivity.this)
                             .setTitle("Confirm Destination")
                             .setMessage("Set (" + latLng.longitude + "," + latLng.latitude + ") as your destination?")
@@ -284,13 +291,19 @@ public class MapsActivity extends AppCompatActivity implements LocationListener,
     @Override
     public void onLocationChanged(Location location) {
         // [TODO] Implement behavior when a location update is received
-        Log.d("MAP_READY", "here.location");
-        Log.d("Geofence", "exists? " + existingGeofence);
+        //Log.d("MAP_READY", "here.location");
+        //Log.d("Geofence", "exists? " + existingGeofence);
         mLat =  location.getLatitude();
         mLong = location.getLongitude();
         LatLng latlng = new LatLng(mLat, mLong);
 
+        //Just move existing marker position per location found
         currentLoc.setPosition(latlng);
+
+        //Update Map Camera
+        lockCam();
+        //Update Geofence existence
+        existingGeofence = myPreferences.getBoolean("existingGeofence", false);
 
         //Store coordinates
         SharedPreferences.Editor editor = myPreferences.edit();
@@ -299,14 +312,25 @@ public class MapsActivity extends AppCompatActivity implements LocationListener,
         editor.apply();
     }
 
+    public void currentLocation(){
+        currentLocOpt = new MarkerOptions()
+                .position(new LatLng(mLat, mLong))
+                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE));
+        currentLoc = mMap.addMarker(currentLocOpt);
+    }
+
     public void showList(){
         // Show/Hide satellite list
         if (mHide) {
+            if (existingGeofence){
+                cancel.setVisibility(View.VISIBLE);
+            }
             satList.setVisibility(View.GONE);
             satCount.setVisibility(View.GONE);
             locked.setVisibility(View.VISIBLE);
             mapFragment.getView().setVisibility(View.VISIBLE);
         } else {
+            cancel.setVisibility(View.GONE);
             satList.setVisibility(View.VISIBLE);
             satCount.setVisibility(View.VISIBLE);
             locked.setVisibility(View.INVISIBLE);
@@ -355,30 +379,23 @@ public class MapsActivity extends AppCompatActivity implements LocationListener,
                             destLocOpt = new MarkerOptions()
                                     .position(latLng)
                                     .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ROSE));
-                            destLoc = mMap.addMarker(destLocOpt);
-
+                            mMap.addMarker(destLocOpt);
                             //Create cancel button
                             cancel.setVisibility(View.VISIBLE);
-                            Toast.makeText(MapsActivity.this, "Geofence Created", Toast.LENGTH_LONG).show();
-                        }
-                    })
-                    .addOnFailureListener(new OnFailureListener() {
-                        @Override
-                        public void onFailure(@NonNull Exception e) {
-                            Toast.makeText(MapsActivity.this, "Geofence Creation Failed", Toast.LENGTH_LONG).show();
+                            //Toast.makeText(MapsActivity.this, "Geofence Created", Toast.LENGTH_LONG).show();
                         }
                     });
         }
     }
 
     public void removeGeofence(){
-        //Remove map marker
-        destLoc.remove();
-        destLoc = null;
+        //Remove map marker & circle
+        mMap.clear();
+        currentLocation();
         cancel.setVisibility(View.GONE);
         //Remove Geofence
         mGeofencingClient.removeGeofences(getGeofencePendingIntent());
-        geofenceRadius.remove();
+        //Tell system that no Geofence exists
         myPreferences.edit().remove("existingGeofence").apply();
     }
 
@@ -445,26 +462,18 @@ public class MapsActivity extends AppCompatActivity implements LocationListener,
     protected void onResume() {
         super.onResume();
         Log.d("MAP_READY", "here.resume");
-        //Delete Geofence if Entered
-        Intent intent = getIntent();
-        deleteGeofence = intent.getBooleanExtra("Geofence", false);
-        if (deleteGeofence) {
-            removeGeofence();
-            Log.d("GeoDelete", "deleted Geofence");
-        }
-        else{
-            // Normal Operations -- Data Recovery
-            showList();
-            //Store Current Coordinates
-            mLat = myPreferences.getFloat("mLat", 0);
-            mLong = myPreferences.getFloat("mLong", 0);
-            //Store Destination Coordinates
-            geoLat = myPreferences.getFloat("geoLat", 0);
-            geoLong = myPreferences.getFloat("geoLong", 0);
-            LatLng latLng = new LatLng(geoLat, geoLong);
-            //Create Geofence if needed
-            makeGeofence(latLng);
-        }
+        // Normal Operations -- Data Recovery
+
+        showList();
+        //Store Current Coordinates
+        mLat = myPreferences.getFloat("mLat", 0);
+        mLong = myPreferences.getFloat("mLong", 0);
+        //Store Destination Coordinates
+        geoLat = myPreferences.getFloat("geoLat", 0);
+        geoLong = myPreferences.getFloat("geoLong", 0);
+        LatLng latLng = new LatLng(geoLat, geoLong);
+        //Create Geofence if needed
+        makeGeofence(latLng);
     }
 
     @Override

@@ -4,4 +4,5 @@
     <string name="currentloc_symbol">currentLoc symbol</string>
     <string name="cancelgeofence">cancelGeoFence</string>
     <string name="satelliteinfo">satelliteInfo</string>
+    <string name="count">Count</string>
 </resources>

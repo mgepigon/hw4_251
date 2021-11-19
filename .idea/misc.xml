@@ -5,10 +5,12 @@
       <map>
         <entry key="..\:/Users/marc/Desktop/hw4_251/app/app/src/main/res/drawable/logo_background.xml" value="0.24479166666666666" />
         <entry key="..\:/Users/marc/Desktop/hw4_251/app/app/src/main/res/layout/activity_maps.xml" value="0.3625" />
+        <entry key="app/src/main/res/layout-v26/activity_maps.xml" value="0.34270833333333334" />
+        <entry key="app/src/main/res/layout/activity_maps.xml" value="0.4563106796116505" />
       </map>
     </option>
   </component>
-  <component name="ProjectRootManager" version="2" languageLevel="JDK_11" default="true" project-jdk-name="1.8" project-jdk-type="JavaSDK">
+  <component name="ProjectRootManager" version="2" languageLevel="JDK_11" default="true" project-jdk-name="11" project-jdk-type="JavaSDK">
     <output url="file://$PROJECT_DIR$/build/classes" />
   </component>
   <component name="ProjectType">

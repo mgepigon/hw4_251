@@ -41,9 +41,9 @@ public class GeofenceTransitionJobIntentService extends JobIntentService {
         // 2. Go back to the main activity (via Intent) to handle cleanup (Geofence removal, etc.)
         notifyUser(getApplicationContext());
 
-        Intent deleteGeofence = new Intent(this, MapsActivity.class);
-        deleteGeofence.putExtra("Geofence", true);
-        startActivity(deleteGeofence);
+        Intent arrived = new Intent(this, MapsActivity.class);
+        arrived.putExtra("Geofence", true);
+        startActivity(arrived);
     }
 
     public void notifyUser(Context context){

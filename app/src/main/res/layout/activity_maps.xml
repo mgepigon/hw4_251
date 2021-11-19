@@ -38,12 +38,12 @@
         android:clickable="true"
         android:contentDescription="@string/currentloc_symbol"
         android:elevation="5dp"
+        android:focusable="true"
         android:minWidth="48dp"
         android:minHeight="48dp"
         app:srcCompat="@android:drawable/ic_menu_mylocation"
         app:tint="#62FF00"
-        tools:ignore="SpeakableTextPresentCheck"
-        android:focusable="true" />
+        tools:ignore="SpeakableTextPresentCheck" />
 
     <ImageView
         android:id="@+id/satellite"
@@ -64,19 +64,18 @@
 
     <TextView
         android:id="@+id/satCount"
-        android:layout_width="118dp"
+        android:layout_width="75dp"
         android:layout_height="wrap_content"
         android:layout_alignBottom="@+id/appToolbar"
-        android:layout_alignParentStart="true"
         android:layout_alignParentTop="true"
-        android:layout_centerHorizontal="true"
-        android:layout_marginStart="171dp"
-        android:layout_marginTop="9dp"
-        android:layout_marginEnd="7dp"
-        android:layout_marginBottom="8dp"
+        android:layout_marginTop="5dp"
+        android:layout_marginEnd="5dp"
+        android:layout_marginBottom="5dp"
         android:layout_toStartOf="@+id/satellite"
+        android:autoSizeTextType="uniform"
         android:elevation="10dp"
-        android:text="" />
+        android:maxLines="2"
+        android:text="@string/count" />
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/cancelGeofence"
